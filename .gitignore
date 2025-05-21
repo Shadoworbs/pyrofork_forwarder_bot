@@ -1,0 +1,20 @@
+# this file prevents accidental upload of files to git
+
+# ignored files
+.idea
+config.py
+*.db
+*.session
+*.session-journal
+*.log
+.env
+./.env
+tests.py
+*.json
+
+# ignored directories
+.idea/
+__pycache__
+./__pycache__
+user_data/
+.venv/
