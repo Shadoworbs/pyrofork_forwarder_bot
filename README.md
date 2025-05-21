@@ -63,7 +63,7 @@ Note: All commands are owner-only and work only in private chats.
    ```env
    API_ID = "your_api_id"
    API_HASH = "your_api_hash"
-   OWNER_USERNAME = "@your_telegram_username"
+   OWNER_ID = "your telegram ID (not username)"
    ```
 
 ### Running the Bot
@@ -75,7 +75,7 @@ Note: All commands are owner-only and work only in private chats.
    ```
 
 2. Set up your forward configuration:
-   - Use `/set_ids` to configure source and target chats
+   - Use `/set_ids source_id target_id` to configure source and target chats
    - Use `/settings` to verify your configuration
    - Use `/forward` to start forwarding
 
