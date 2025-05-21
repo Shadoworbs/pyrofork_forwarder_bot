@@ -5,12 +5,12 @@ FROM python:3.12-slim AS builder
 WORKDIR /app
 
 # Copy requirements file
-COPY requirements.txt .
+COPY requirements-l.txt .
 
 # Create and activate virtual environment
 RUN python -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements-l.txt
 
 # Stage 2: Runtime
 FROM python:3.12-slim
