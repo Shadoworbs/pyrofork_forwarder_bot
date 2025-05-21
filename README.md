@@ -39,8 +39,7 @@ Note: All commands are owner-only and work only in private chats.
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/yourusername/telegram-forwarder-bot.git
-   cd telegram-forwarder-bot
+   git clone https://github.com/Shadoworbs/pyrofork_forwarder_bot.git && cd pyrofork_forwarder_bot
    ```
 
 2. Install required packages:
