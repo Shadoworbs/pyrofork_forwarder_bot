@@ -220,13 +220,26 @@ async def forward_command(client: Client, message: Message):
                 or message.has_protected_content
                 or message.command
                 or message.empty
-                or message.forward_from_chat.is_restricted
                 ):
                 failed_skipped += 1
                 console.log(
                     f"[red]Skipped {1 + failed_skipped} message(s): {message.id} - {message.text}[/red]"
                 )
                 continue
+            elif message.forward_from_chat:
+                try:
+                    if message.forward_from_chat.is_restricted:
+                        failed_skipped += 1
+                        console.log(
+                            f"[red]Skipped {1 + failed_skipped} message(s): {message.id} - {message.text}[/red]"
+                        )
+                        continue
+                except Exception as e:
+                    console.log(
+                        f"[red]Error checking forward_from_chat: {e}[/red]"
+                    )
+                    failed_skipped += 1
+                    continue
 
             batch.append(message)
             msg_count += 1
