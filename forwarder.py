@@ -216,10 +216,15 @@ async def forward_command(client: Client, message: Message):
                     user_id, "⚠️ Forward operation stopped by user."
                 )
                 break
-            if message.service:
+            if (message.service
+                or message.has_protected_content
+                or message.command
+                or message.empty
+                or message.forward_from_chat.is_restricted
+                ):
                 failed_skipped += 1
                 console.log(
-                    f"[red]Skipped service message: {message.id} - {message.text}[/red]"
+                    f"[red]Skipped {1 + failed_skipped} message(s): {message.id} - {message.text}[/red]"
                 )
                 continue
 
