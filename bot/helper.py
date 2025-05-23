@@ -7,9 +7,10 @@ from pyrogram.errors import BadRequest
 from rich.console import Console
 from .database import Database
 
+
 console = Console()
 
-class ConversationHandler:
+class HelperClass:
     def __init__(self, client: Client, db: Database):
         self.client = client
         self.db = db

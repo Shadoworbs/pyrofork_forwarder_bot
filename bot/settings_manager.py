@@ -1,20 +1,17 @@
 import logging
 from pyrogram import Client
 from pyrogram.types import Message
-from bot.conversation import ConversationHandler as conv_handler
+from bot.helper import HelperClass as conv_handler
 from .database import Database
 from rich.console import Console
 
-
 console = Console()
-
-
 
 class SettingsManager:
     def __init__(self, client: Client, db: Database):
         self.client = client
         self.db = db
-
+ 
     async def _ensure_db_ready(self, user_id: int, message: Message) -> bool:
         """Ensure database is ready for the user.
 

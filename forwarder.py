@@ -5,13 +5,15 @@
 #
 import logging
 import asyncio
+import sys
+import time
 from pyrogram.errors import FloodWait
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from rich.console import Console
 from bot.configs import Config
 from bot.database import Database
-from bot.conversation import ConversationHandler
+from bot.helper import HelperClass
 from bot.settings_manager import SettingsManager
 
 
@@ -38,15 +40,13 @@ reset_confirmations = {}  # Track reset confirmations
 app = Client("my_account", api_id=api_id, api_hash=api_hash)
 
 # Initialize handlers
-conversation_handler = ConversationHandler(app, db)
+conversation_handler = HelperClass(app, db)
 settings_manager = SettingsManager(app, db)
 
 
 # ------------- Start Bot ------------- #
 @app.on_message(
-    filters.command("start") 
-    & filters.user(Config.OWNER_ID) 
-    & filters.private
+    filters.command("start") & filters.user(Config.OWNER_ID) & filters.private
 )
 async def start_command(client: Client, message: Message):
     """Handle start command"""
@@ -61,9 +61,7 @@ Use /help to see available commands."""
 
 #
 @app.on_message(
-    filters.command("help") 
-    & filters.user(Config.OWNER_ID) 
-    & filters.private
+    filters.command("help") & filters.user(Config.OWNER_ID) & filters.private
 )
 async def help_command(client: Client, message: Message):
     """Handle help command"""
@@ -132,11 +130,15 @@ async def set_ids_command(client: Client, message: Message):
 
     # Save settings
     await db.set_user_chats(user_id, source_chat_id, target_chat_id)
+    source_info, target_info = await conversation_handler.get_chat_info(
+        (source_chat_id, target_chat_id)
+    )
     await message.reply(
         f"✅ Source and target chats set successfully:\n"
-        f"Source: `{source_chat_id}`\n"
-        f"Target: `{target_chat_id}`\n\n"
-        f"Use /forward to start forwarding files."
+        f"Source: `{source_chat_id}` {source_info.get('title', 'Unknown')} \n"
+        f"Target: `{target_chat_id}` {target_info.get('title', 'Unknown')}\n\n"
+        f"Use /st (or /settings) to see your settings.\nUse /f (or /forward) to start forwarding files.\n"
+        f"Use /rs (or /reset) to reset your settings.\n"
     )
 
 
@@ -168,6 +170,19 @@ async def check_owner_id(app: Client, message: Message):
 async def forward_command(client: Client, message: Message):
     """Handle forward command"""
     user_id = message.from_user.id
+    start_time = time.time()
+
+    msg_count = 0
+    batch = []
+    index = 0
+    failed_skipped = 0
+    db_update = {}
+    forward_count = 0
+    protected = 0
+    command = 0
+    empty = 0
+    service = 0
+
 
     # exit the bot if owner id is not set in the environment variable
     if not await check_owner_id(client, message):
@@ -197,54 +212,60 @@ async def forward_command(client: Client, message: Message):
 
     try:
         active_forwards.add(user_id)
-        # await message.delete()
-        progress_msg = await message.reply("🔄 Starting forward operation...")
+        progress_msg = await message.reply("Message filtering process started...")
 
         console.log("Starting filtering process...")
 
-        msg_count = 0
-        batch = []
-        index = 0
-        failed_skipped = 0
-
         # Process messages
-        async for message in app.get_chat_history(chat_id=source_chat):
-            # with open("ids.txt", "a") as f:
-            #     f.write(f"{message.id}\n")
+        async for message in app.get_chat_history(
+            chat_id=source_chat, limit=100_000,
+        ):
             if user_id not in active_forwards:
                 await client.send_message(
                     user_id, "⚠️ Forward operation stopped by user."
                 )
                 break
-            if (message.service
-                or message.has_protected_content
-                or message.command
-                or message.empty
-                ):
-                failed_skipped += 1
+            if message.service:
+                service += 1
                 console.log(
-                    f"[red]Skipped {1 + failed_skipped} message(s): {message.id} - {message.text}[/red]"
+                    f"[red]Skipped {service} Service message(s): ID ({message.id})[/red]"
                 )
                 continue
-            elif message.forward_from_chat:
-                try:
-                    if message.forward_from_chat.is_restricted:
-                        failed_skipped += 1
-                        console.log(
-                            f"[red]Skipped {1 + failed_skipped} message(s): {message.id} - {message.text}[/red]"
-                        )
-                        continue
-                except Exception as e:
-                    console.log(
-                        f"[red]Error checking forward_from_chat: {e}[/red]"
-                    )
-                    failed_skipped += 1
-                    continue
+            if message.has_protected_content:
+                protected += 1
+                console.log(
+                    f"[red]Skipped {protected} Protected message(s): ID ({message.id})[/red]"
+                )
+                continue
+            if message.command:
+                command += 1
+                console.log(
+                    f"[red]Skipped {command} Command message(s): ID ({message.id})[/red]"
+                )
+                continue
+            if message.empty:
+                empty += 1
+                console.log(
+                    f"[red]Skipped {empty} Empty message(s): ID ({message.id})[/red]"
+                )
+                continue
 
             batch.append(message)
             msg_count += 1
+            await asyncio.sleep(0.2)
+        await progress_msg.edit("Filtering Complete.\nSending messages")
+        await asyncio.sleep(0.5)
+        console.log(
+            f"[green]Filtering complete. {msg_count:,} messages found![/green]"
+        )
 
         while index < len(batch):
+            if user_id not in active_forwards:
+                await client.send_message(
+                    user_id, "⚠️ Forward operation stopped by user."
+                )
+                break
+
             if len(batch) == 0:
                 await progress_msg.edit("No messages to forward.")
                 console.log(
@@ -254,12 +275,21 @@ async def forward_command(client: Client, message: Message):
                 break
             if len(batch) < 100:
                 messages_to_send = batch[::-1][index:]
+                index += len(messages_to_send)
 
             messages_to_send = batch[::-1][index : index + 100]
-            # progress.update(task, description="Forwarding batch of files...")
             console.log(
                 f"[green]Forwarding batch of {len(messages_to_send)} files...[/green]"
             )
+
+            percentage = round((index + 100) / len(batch) * 100, 2)
+            await progress_msg.edit(
+                f"Forwarding {msg_count:,} files:\n"
+                f"This will take about {msg_count * (0.7 / 60) + (2 * msg_count // 100):.1f} Mins.\n"
+                f"Forwarded {index} of {msg_count} files {percentage}% \n"
+                f"This message will be updated every {len(messages_to_send) * 0.5:.1f} seconds...\n"
+            )
+            
             await forward_files(
                 client,
                 messages_to_send,
@@ -268,40 +298,64 @@ async def forward_command(client: Client, message: Message):
                 message,
                 total_msgs=msg_count,
                 failed_skipped=failed_skipped,
+                user_id=user_id,
             )
-            await progress_msg.edit(f"Forwarding {index} of {msg_count} files...")
             await asyncio.sleep(2)
-            index += 100
-            percentage = round((index + 100) / len(batch) * 100, 2)
-            await progress_msg.edit(
-                f"Forwarding {len(batch)} of {msg_count} files... {percentage}%"
-            )
+            index += len(messages_to_send)
+
 
         # Finalize progress
         console.log(
             f"[green]Forwarding complete. {msg_count:,} messages forwarded![/green]"
         )
-        await progress_msg.delete()
+        # await progress_msg.delete()
+        db_update["Done"] = False
+        db_update["last_msg_id"] = 0
+        await db.update_user_settings(user_id, db_update)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        await progress_msg.edit(
+            f"**✅ Forwarding complete:**\n\n"
+            f"**Messages forwarded: {msg_count - failed_skipped:,}**\n"
+            f"**Failed/Skipped messages: {failed_skipped:,}**\n\n"
+            f"**Total messages: {msg_count:,}**\n"
+            f"**Elapsed time: {elapsed_time / 60:.2f} minutes**\n"
+            f"**Messages skipped because of protected content: {protected:,}**\n"
+            f"**Messages skipped because of empty content: {empty:,}**\n"
+            f"**Messages skipped because of command: {command:,}**\n"
+            f"**Messages skipped because of service: {service:,}**\n"
+            f"**Messages skipped because of other reasons: {failed_skipped:,}**\n"
+        )
         await app.send_message(
             target_chat,
             f"**✅ Forwarding complete:**\n\n"
             f"**Messages forwarded: {msg_count - failed_skipped:,}**\n"
-            f"**Failed/Skipped messages: {failed_skipped:,}**\n\n",
+            f"**Failed/Skipped messages: {failed_skipped:,}**\n\n"
+            f"**Total messages: {msg_count:,}**\n"
+            f"**Elapsed time: {elapsed_time / 60:.2f} minutes**\n"
+            f"**Messages skipped because of protected content: {protected:,}**\n"
+            f"**Messages skipped because of empty content: {empty:,}**\n"
+            f"**Messages skipped because of command: {command:,}**\n"
+            f"**Messages skipped because of service: {service:,}**\n"
+            f"**Messages skipped because of other reasons: {failed_skipped:,}**\n"
         )
         console.log(
             f"[green]Forwarding complete. {msg_count:,} messages forwarded![/green]"
         )
 
     except Exception as e:
+        db_update["Done"] = False
+        await db.update_user_settings(user_id, db_update)
         active_forwards.discard(user_id)
-        await progress_msg.delete()
         console.log(f"[red]Error occurred: {e}[/red]")
         logging.error(f"Error filtering messages: {e}")
         await app.send_message(
             user_id, f"An error occurred. Please try again later.\n{e}"
         )
-    finally:
-        active_forwards.discard(user_id)
+
+    except FloodWait as e:
+        console.log(f"[red]Flood wait error: sleeping for {e.value} seconds[/red]")
+        await asyncio.sleep(e.value + 0.3)
 
 
 async def forward_files(
@@ -311,8 +365,11 @@ async def forward_files(
     target_chat,
     message: Message,
     total_msgs=0,
+    failed_skipped=0,
+    user_id=None
 ):
     """Forward a batch of files"""
+    db_update = {}
     copy_count = 0
     sent_ids = set()
     for msg in messages_to_send:
@@ -332,10 +389,11 @@ async def forward_files(
                 for i in bundle_ids:
                     sent_ids.add(i)
                 console.log(
-                    f"[green]Copied: {copy_count} of {total_msgs:,} file(s) [/green]"
+                    f"[green]Copied: {len(sent_ids)} of {total_msgs:,} file(s) [/green]"
                 )
-                await asyncio.sleep(0.5)
-                # progress.update("Progress", advance=copy_count)
+                db_update["last_msg_id"] = int(max(sent_ids))
+                await db.update_user_settings(user_id, db_update)
+                await asyncio.sleep(len(media_group) * 0.3)
             else:
                 await app.copy_message(
                     chat_id=target_chat,
@@ -345,8 +403,10 @@ async def forward_files(
                 )
                 copy_count += 1
                 sent_ids.add(msg.id)
+                db_update["last_msg_id"] = int(msg.id)
+                await db.update_user_settings(user_id, db_update)
                 console.log(
-                    f"[green]Copied: {copy_count} of {len(messages_to_send)} file(s) [/green]"
+                    f"[green]Copied: {copy_count} of {total_msgs:,} file(s) [/green]"
                 )
                 await asyncio.sleep(0.5)
                 # progress.update("Progress", advance=copy_count)
@@ -355,12 +415,14 @@ async def forward_files(
         except FloodWait as e:
             console.log(f"[red]Flood wait error: sleeping for {e.value} seconds[/red]")
             await asyncio.sleep(e.value + 0.3)
-
+ 
 
 # --------- Reset Settings Command --------- #
 
 
-@app.on_message(filters.command(["rs", "reset"]) & filters.user(Config.OWNER_ID) & filters.private)
+@app.on_message(
+    filters.command(["rs", "reset"]) & filters.user(Config.OWNER_ID) & filters.private
+)
 async def reset_settings_command(client: Client, message: Message):
     """Handle reset settings command"""
     user_id = str(message.from_user.id)
@@ -368,9 +430,10 @@ async def reset_settings_command(client: Client, message: Message):
     try:
         if message.from_user.id == Config.OWNER_ID:
             # Check if user is the owner
-            await message.reply("All your settings will be reset in 5 seconds.")
+            reset_msg = await message.reply("All your settings will be reset in 5 seconds.")
             await asyncio.sleep(5)
         await db.reset_user_settings(user_id)
+        await reset_msg.edit("✅ Your settings have been reset.")
 
     except Exception as e:
         logging.error(f"Error in reset command: {e}")

@@ -7,7 +7,6 @@ API_HASH = os.getenv("API_HASH")
 OWNER_USERNAME = os.getenv("OWNER_USERNAME", default="@shadoworbs")
 
 
-
 class Config(object):
     API_ID = API_ID
     API_HASH = API_HASH

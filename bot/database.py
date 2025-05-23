@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional, Dict
 from pathlib import Path
 
-
+ 
 class Database:
     """Database class to handle user settings and data storage.
 
