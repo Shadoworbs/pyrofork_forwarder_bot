@@ -5,6 +5,11 @@ from bot.helper import HelperClass as conv_handler
 from .database import Database
 from rich.console import Console
 
+
+# Configure logging
+from bot.utils import setup_logging
+setup_logging()
+
 console = Console()
 
 class SettingsManager:
@@ -30,7 +35,7 @@ class SettingsManager:
             return True
 
         except Exception as e:
-            console.log(f"[Red] Error initializing database: {e} [/Red]")
+            logging.error(f"Error initializing database: {e}")
             await message.reply("❌ Error accessing settings. Please try again later.")
             return False
 
@@ -79,7 +84,7 @@ class SettingsManager:
             await message.reply(text)
 
         except Exception as e:
-            console.log(f"[Red] Error displaying settings: {e} [/Red]")
+            logging.error(f"Error fetching settings: {e}")
             await message.reply(
                 "❌ An error occurred while fetching settings. Please try again later."
             )

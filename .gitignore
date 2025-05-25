@@ -18,3 +18,4 @@ __pycache__
 ./__pycache__
 user_data/
 .venv/
+user_data_backup/

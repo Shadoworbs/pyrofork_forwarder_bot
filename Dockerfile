@@ -27,6 +27,9 @@ COPY . .
 # Create data directory
 RUN mkdir -p user_data
 
+# Make start script executable
+RUN chmod +x start.sh
+
 # Add virtual environment to path
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -37,5 +40,5 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Create volume for persistent data
 VOLUME /app/user_data
 
-# Run the bot
-CMD ["python", "forwarder.py"]
+# Run the startup script
+CMD ["./start.sh"]

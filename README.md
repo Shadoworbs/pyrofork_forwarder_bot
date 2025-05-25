@@ -1,31 +1,48 @@
 # Telegram Forwarder Bot
 
-A sophisticated Telegram bot built with Pyrofork that allows owners to forward media files between chats with advanced features and robust error handling.
+A sophisticated Telegram bot built with PyroFork that allows owners to forward messages and media between chats with advanced features, comprehensive error handling, and intelligent media group preservation.
 
-## Features
+## 🚀 Features
 
-- 🚀 **Fast & Efficient**: Built with Pyrofork for optimal performance
-- 💾 **Persistent Storage**: User-specific JSON file storage
-- 🎯 **Multiple Chat Support**: Forward between any accessible chats
-- 📊 **Progress Tracking**: Real-time forwarding progress updates
-- 🔒 **Owner-Only Access**: Secure access control
-- 📱 **Media Group Support**: Preserves media groups while forwarding
-- ⚙️ **User Settings Management**: Easy-to-use settings menu
-- 🔄 **Batch Processing**: Handles large forwards efficiently
-- 🛡️ **Error Handling**: Robust error recovery and graceful degradation
-- 🧹 **Auto Cleanup**: Automatic cleanup of stale confirmations
-- 🎛️ **Command System**: Intuitive command interface
+### Core Features
 
-## Commands
+- **⚡ Fast & Efficient**: Built with PyroFork for optimal performance and reliability
+- **💾 Persistent Storage**: Thread-safe JSON database with automatic backups and corruption recovery
+- **🎯 Multiple Chat Support**: Forward between any accessible chats (groups, channels, private)
+- **📊 Real-time Progress Tracking**: Live updates with detailed statistics and processing rates
+- **🔒 Owner-Only Access**: Secure access control with comprehensive permission checks
+- **📱 Smart Media Group Support**: Preserves albums and media groups as complete units
+- **🏗️ Chronological Order**: Messages forwarded in correct chronological sequence (oldest first)
+
+### Advanced Features
+
+- **⚙️ Comprehensive Settings Management**: View, edit, and reset configuration with chat details
+- **🔄 Intelligent Batch Processing**: Handles large message volumes efficiently with memory optimization  
+- **🛡️ Robust Error Handling**: Exponential backoff, FloodWait management, and graceful recovery
+- **🧹 Automatic Cleanup**: Smart cleanup of temporary data and corrupted files with backup system
+- **🎛️ Intuitive Command System**: User-friendly commands with comprehensive validation
+- **📈 Detailed Statistics**: Track processed, failed, skipped messages and media groups with rates
+- **🔄 Queue Management**: Active operation tracking with stop/resume capabilities
+- **⚠️ Rate Limiting**: Built-in delays to prevent API rate limits and account restrictions
+- **🔐 Data Safety**: Automatic backups before operations with recovery mechanisms
+
+## 📱 Commands
+
+### Core Commands
 
 - `/start` - Start the bot and view welcome message
-- `/help` - Show available commands and help
-- `/set_ids` (or `/set`) - Set source and target chat IDs directly
-- `/settings` (or `/st`) - View your current settings
-- `/forward` (or `/f`, `/fwd`) - Start forwarding files with progress tracking
-- `/rs` (or `/reset`) - Reset all your settings
+- `/help` - Show available commands and detailed feature list
+- `/set_ids` (or `/set`) - Set source and target chat IDs with validation
+- `/forward` (or `/f`, `/fwd`) - Start forwarding with progress tracking
+- `/stop` - Stop ongoing forward operation gracefully
 
-Note: All commands are owner-only and work only in private chats.
+### Management Commands
+
+- `/settings` (or `/st`) - View current settings with chat details and timestamps
+- `/stats` - View detailed statistics of current/last forward operation
+- `/reset` (or `/rs`) - Reset all settings with 5-second confirmation countdown
+
+**Note**: All commands are owner-only and work exclusively in private chats for security.
 
 ## Setup Instructions
 
@@ -68,39 +85,119 @@ Note: All commands are owner-only and work only in private chats.
 
 ### Running the Bot
 
-1. Start the bot:
+#### Option 1: Manual Execution
+
+1. First, run the login process:
 
    ```bash
-   python forwarder.py
+      python login.py
    ```
 
-2. Set up your forward configuration:
+2. Then start the bot:
+
+   ```bash
+      python forwarder.py
+   ```
+
+#### Option 2: Automated Startup (Recommended)
+
+1. Use the provided startup script:
+
+   ```bash
+   chmod +x start.sh  # Make executable (Linux/macOS)
+   ./start.sh
+   ```
+
+   On Windows:
+
+   ```bash
+      bash start.sh
+   ```
+
+#### Option 3: Docker Deployment
+
+1. Build the Docker image:
+
+   ```bash
+   docker build -t telegram-forwarder .
+   ```
+
+2. Run the container:
+
+   ```bash
+   docker run -d --name forwarder-bot -v $(pwd)/user_data:/app/user_data telegram-forwarder
+   ```
+
+3. Set up your forward configuration:
    - Use `/set_ids source_id target_id` to configure source and target chats
    - Use `/settings` to verify your configuration
    - Use `/forward` to start forwarding
 
-   ## Project Structure
+## Project Structure
 
-   ``` md
+   ```plaintext
+   pyrofork_forwarder_bot/
    ├── bot/
+   │   ├── __init__.py
    │   ├── configs.py         # Configuration management
-   │   ├── conversation.py    # Conversation handler
-   │   ├── database.py       # Database operations
-   │   └── settings_manager.py # Settings management
-   ├── forwarder.py          # Main bot file
-   ├── requirements.txt      # Dependencies
-   └── .env                 # Environment variables
+   │   ├── database.py        # Thread-safe database operations with backups
+   │   ├── helper.py          # Chat validation and utility functions
+   │   ├── settings_manager.py # Settings management
+   │   └── utils.py           # Utility classes (RetryHandler, ForwardStats, etc.)
+   ├── user_data/             # Database storage directory (auto-created)
+   ├── forwarder.py           # Main bot application
+   ├── login.py               # Telegram authentication script
+   ├── start.sh               # Automated startup script
+   ├── Dockerfile             # Docker configuration
+   ├── requirements-l.txt     # Linux dependencies
+   ├── requirements-w.txt     # Windows dependencies
+   ├── environ.env            # Environment template
+   └── README.md              # Project documentation
    ```
 
-## Error Handling
+## Database Management
 
-The bot includes comprehensive error handling:
+The bot includes a sophisticated database system with:
 
-- FloodWait protection
-- Invalid chat ID handling
-- Database operation error recovery
-- Message deletion error handling
-- Connection error recovery
+- **Thread-safe Operations**: Async locks prevent data corruption
+- **Automatic Backups**: Creates backups before major operations
+- **Corruption Recovery**: Restores from backups if database corruption is detected
+- **Data Persistence**: User settings are preserved across restarts
+- **Safe Reset**: 5-second countdown protection for data deletion
+
+## Technical Features
+
+### Message Processing
+
+- **Chronological Ordering**: Two-phase collection and reversal ensures oldest-first forwarding
+- **Media Group Preservation**: Albums forwarded as complete units without splitting
+- **Batch Processing**: Efficient memory usage for large message volumes
+- **Progress Tracking**: Real-time statistics with processing rates and ETA
+
+### Error Recovery
+
+- **Retry Handler**: Exponential backoff with configurable maximum attempts
+- **FloodWait Management**: Intelligent delays to respect Telegram rate limits
+- **Queue Management**: Active operation tracking with graceful stop/resume
+- **Connection Resilience**: Automatic reconnection on network interruptions
+
+### Performance Optimizations
+
+- **Memory Management**: Efficient batch processing to handle large chat histories
+- **Rate Limiting**: Built-in delays prevent API restrictions
+- **Async Operations**: Non-blocking database and network operations
+- **Resource Cleanup**: Automatic cleanup of temporary data and handles
+
+## Error Handling & Reliability
+
+The bot includes comprehensive error handling with:
+
+- **FloodWait Protection**: Exponential backoff for API rate limits
+- **Invalid Chat ID Handling**: Validates and normalizes chat identifiers
+- **Database Operation Recovery**: Automatic backup restoration on corruption
+- **Message Processing Errors**: Graceful handling of failed message operations
+- **Connection Error Recovery**: Automatic reconnection on network issues
+- **Memory Management**: Efficient batch processing to prevent memory overloads
 
 ## Contributing
 
