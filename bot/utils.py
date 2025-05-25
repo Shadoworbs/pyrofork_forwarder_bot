@@ -65,7 +65,7 @@ class ForwardStats:
         else:
             eta_seconds = 0
 
-        return {
+        self.get_stats =  {
             "processed": self.processed,
             "failed": self.failed,
             "skipped": self.skipped,
