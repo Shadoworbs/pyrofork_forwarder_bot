@@ -31,7 +31,7 @@ api_id = Config.API_ID
 api_hash = Config.API_HASH
 
 # Configuration constants
-COPY_DELAY_SECONDS = 0.85  # Delay after each copy operation to prevent FloodWait
+COPY_DELAY_SECONDS = 0.5  # Delay after each copy operation to prevent FloodWait
 
 # Initialize components
 console = Console()
@@ -547,7 +547,7 @@ async def forward_command(client: Client, message: Message):
             total_collected += 1
 
             # Update progress for collection phase every 100 messages
-            if total_collected % 100 == 0:
+            if total_collected % 500 == 0:
                 await progress_msg.edit_text(
                     f"📥 Collected {total_collected} valid messages...\n"
                     f"🔄 Preparing to forward in chronological order..."
@@ -564,10 +564,10 @@ async def forward_command(client: Client, message: Message):
             )
             return
 
-        await progress_msg.edit_text(
-            f"\n{stats.total} messages will be forwarded.\n"
-            # f"{stats.format_progress()}"
-        )
+        # await progress_msg.edit_text(
+        #     f"\n{stats.total} messages will be forwarded.\n\n"
+        #     f"{stats.format_progress()}"
+        # )
 
         # Second pass: forward messages in correct chronological order
         for i, msg in enumerate(all_messages):
@@ -623,7 +623,7 @@ async def forward_command(client: Client, message: Message):
 
         # Final status
         await progress_msg.edit_text(
-            f"✅ Forward operation completed!\n\n{stats.format_progress()}"
+            f"**✅ Forward operation completed!**\n\n{stats.format_progress()}"
         )
 
     except Exception as e:

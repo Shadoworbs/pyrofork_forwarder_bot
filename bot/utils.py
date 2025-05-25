@@ -49,8 +49,10 @@ class ForwardStats:
         self.media_groups = 0
         self.total = 0
         self.percentage = 0.0
-        self.total_delays = 0.0  # Track total sleep time for ETA calculation    def get_stats(self) -> Dict[str, Any]:
-        """Get current statistics."""
+        self.total_delays = 0.0  # Track total sleep time for ETA calculation
+
+    # Get current statistics for forward operations.
+    def get_stats(self) -> Dict[str, Any]:
         elapsed = (datetime.now() - self.start_time).total_seconds()
         self.percentage = (self.processed / self.total * 100) if self.total > 0 else 0.0
 
@@ -65,7 +67,7 @@ class ForwardStats:
         else:
             eta_seconds = 0
 
-        self.get_stats =  {
+        return  {
             "processed": self.processed,
             "failed": self.failed,
             "skipped": self.skipped,
@@ -85,7 +87,7 @@ class ForwardStats:
         minutes = int((seconds % 3600) // 60)
         secs = int(seconds % 60)
 
-        return f"{hours}:{minutes:02d}:{secs:02d}"
+        return f"{hours}H:{minutes:02d}M:{secs:02d}S"
 
     def format_progress(self) -> str:
         """Format progress message."""
@@ -96,13 +98,13 @@ class ForwardStats:
         )
 
         return (
-            f"📊 **Forward Progress: {stats['percentage']:.1f}%**\n"
-            f"✅ Processed: {stats['processed']:,}/{stats['total']:,}\n"
-            f"🕒 ETA: {eta_formatted}\n"
-            f"⌛ Elapsed: {elapsed_formatted}\n"
-            f"📑 Media Groups: {stats['media_groups']}\n"
-            f"⚠️ Failed: {stats['failed']}\n"
-            f"⏭️ Skipped: {stats['skipped']}\n"
+            f"📊 **Progress: {stats['percentage']:.1f}%**\n"
+            f"✅ **Processed:** `{stats['processed']:,}/{stats['total']:,}`\n"
+            f"🕒 **ETA:** `{eta_formatted}`\n"
+            f"⌛ **Elapsed:** `{elapsed_formatted}`\n"
+            f"📑 **Media Groups:** `{stats['media_groups']}`\n"
+            f"⚠️ **Failed:** `{stats['failed']}`\n"
+            f"⏭️ **Skipped:** `{stats['skipped']}`\n"
         )
 
 
