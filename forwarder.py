@@ -561,7 +561,6 @@ async def forward_command(client: Client, message: Message):
             f"\n{stats.total} messages will be forwarded.\n"
             # f"{stats.format_progress()}"
         )
-        await asyncio.sleep(0.5)
 
         # Second pass: forward messages in correct chronological order
         for i, msg in enumerate(all_messages):
@@ -573,6 +572,7 @@ async def forward_command(client: Client, message: Message):
                 if media_collector.add_message(msg):
                     complete_groups = media_collector.get_complete_groups()
                     for group in complete_groups:
+                        await asyncio.sleep(0.7)  # Small delay to avoid FloodWait
                         if await forward_media_group(
                             client, group, target_chat, retry_handler
                         ):
@@ -583,6 +583,7 @@ async def forward_command(client: Client, message: Message):
                 continue
 
             # Handle single messages
+            await asyncio.sleep(0.7)  # Small delay to avoid FloodWait
             if await forward_message(client, msg, target_chat, retry_handler):
                 stats.processed += 1
             else:
