@@ -73,11 +73,11 @@ class SettingsManager:
                 f"**SOURCE CHAT:**\n"
                 f"📤 **Source Chat ID:** `{source_chat_id}`\n"
                 f"📥 **Source Chat Title:** `{source_chat_title}`\n"
-                f"📥 **Chat Type:** `{str(chat_infos[0].get('type', 'Unknown')).split(".")[-1]}`\n\n"
+                f'📥 **Chat Type:** `{str(chat_infos[0].get('type', 'Unknown')).split('.')[-1]}`\n\n'
                 f"🎯 **TARGET CHAT:🎯**:\n"
                 f"📥 **Target Chat ID:** `{target_chat_id}`\n"
                 f"📥 **Target Chat Title:** `{target_chat_title}`\n"
-                f"📥 **Chat Type:** `{str(chat_infos[1].get('type', "Unknown")).split(".")[-1]}`\n\n"
+                f'📥 **Chat Type:** `{str(chat_infos[1].get('type', "Unknown")).split('.')[-1]}`\n\n'
                 f"🕒 **Last Updated:** `{updated_at}`\n"
             )
 
