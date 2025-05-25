@@ -30,6 +30,9 @@ setup_logging()
 api_id = Config.API_ID
 api_hash = Config.API_HASH
 
+# Configuration constants
+COPY_DELAY_SECONDS = 0.85  # Delay after each copy operation to prevent FloodWait
+
 # Initialize components
 console = Console()
 db = Database("user_data")  # Initialize with user_data directory
@@ -71,7 +74,7 @@ Use /help to see available commands."""
 @app.on_message(
     filters.command("help") & filters.user(Config.OWNER_ID) & filters.private
 )
-async def help_command(client: Client, message: Message):    
+async def help_command(client: Client, message: Message):
     """Handle help command"""
     help_text = """
 Here are the available commands:\n
@@ -438,6 +441,8 @@ async def forward_media_group(
             from_chat_id=media_group[0].chat.id,
             message_id=media_group[0].id,
         )
+        # Add delay after successful copy operation to prevent FloodWait
+        await asyncio.sleep(COPY_DELAY_SECONDS)
         return True
     except Exception as e:
         logging.error(f"Error forwarding media group: {e}")
@@ -456,6 +461,8 @@ async def forward_message(
             message_id=message.id,
             disable_notification=True,
         )
+        # Add delay after successful copy operation to prevent FloodWait
+        await asyncio.sleep(COPY_DELAY_SECONDS)
         return True
     except Exception as e:
         logging.error(f"Error forwarding message: {e}")
@@ -521,11 +528,11 @@ async def forward_command(client: Client, message: Message):
         progress_updater = asyncio.create_task(update_progress(progress_msg, stats))
         await progress_msg.edit_text("📥 Collecting messages in chronological order...")
         await asyncio.sleep(0.5)  # Initial delay to avoid FloodWait
-        
+
         all_messages = []
         batch_size = 100  # Process in batches to manage memory
         total_collected = 0
-        
+
         # First pass: collect all messages to reverse the order
         async for msg in app.get_chat_history(source_chat):
             if not queue._active:
@@ -538,9 +545,9 @@ async def forward_command(client: Client, message: Message):
 
             all_messages.append(msg)
             total_collected += 1
-            
-            # Update progress for collection phase every 50 messages
-            if total_collected % 50 == 0:
+
+            # Update progress for collection phase every 100 messages
+            if total_collected % 100 == 0:
                 await progress_msg.edit_text(
                     f"📥 Collected {total_collected} valid messages...\n"
                     f"🔄 Preparing to forward in chronological order..."
@@ -549,14 +556,14 @@ async def forward_command(client: Client, message: Message):
         # Reverse the entire list to get chronological order (oldest first)
         all_messages.reverse()
         stats.total = len(all_messages)
-        
+
         if stats.total == 0:
             await progress_msg.edit_text(
                 "❌ No valid messages found to forward.\n"
                 "All messages were either service messages, empty, commands, or protected content."
             )
             return
-        
+
         await progress_msg.edit_text(
             f"\n{stats.total} messages will be forwarded.\n"
             # f"{stats.format_progress()}"
@@ -590,12 +597,12 @@ async def forward_command(client: Client, message: Message):
                 stats.failed += 1
 
             # Update progress every 10 messages or every 5% of progress
-            progress_interval = max(10, stats.total // 20)  # Update at least every 5% of progress
+            progress_interval = max(
+                10, stats.total // 20
+            )  # Update at least every 5% of progress
             if (i + 1) % progress_interval == 0:
                 stats.percentage = ((i + 1) / stats.total) * 100
-                await progress_msg.edit_text(
-                    f"{stats.format_progress()}"
-                )
+                await progress_msg.edit_text(f"{stats.format_progress()}")
 
             await asyncio.sleep(0.5)  # Rate limiting to avoid FloodWait
 
@@ -606,10 +613,8 @@ async def forward_command(client: Client, message: Message):
                 stats.media_groups += 1
             else:
                 stats.failed += len(group)
-        
-        logging.info(
-            "Forwarding completed successfully!"
-        )
+
+        logging.info("Forwarding completed successfully!")
 
         # Cleanup
         if user_id in active_forwards:

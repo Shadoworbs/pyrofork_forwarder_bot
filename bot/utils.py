@@ -9,6 +9,7 @@ from rich.console import Console
 
 console = Console()
 
+
 class RetryHandler:
     """Handles retrying operations with exponential backoff."""
 
@@ -48,11 +49,22 @@ class ForwardStats:
         self.media_groups = 0
         self.total = 0
         self.percentage = 0.0
-
-    def get_stats(self) -> Dict[str, Any]:
+        self.total_delays = 0.0  # Track total sleep time for ETA calculation    def get_stats(self) -> Dict[str, Any]:
         """Get current statistics."""
         elapsed = (datetime.now() - self.start_time).total_seconds()
         self.percentage = (self.processed / self.total * 100) if self.total > 0 else 0.0
+
+        # Calculate ETA based on remaining messages and expected delays
+        remaining = self.total - self.processed
+        if self.processed > 0 and remaining > 0:
+            # Calculate average time per message based on actual elapsed time
+            # This includes all delays: COPY_DELAY_SECONDS (0.85s), processing delays (0.7s),
+            # rate limiting (0.5s), and any retry/error handling delays
+            avg_time_per_message = elapsed / self.processed
+            eta_seconds = remaining * avg_time_per_message
+        else:
+            eta_seconds = 0
+
         return {
             "processed": self.processed,
             "failed": self.failed,
@@ -60,18 +72,34 @@ class ForwardStats:
             "media_groups": self.media_groups,
             "total": self.total,
             "elapsed": elapsed,
-            "rate": self.processed // elapsed if elapsed > 0 else 0,
+            "eta": eta_seconds,
             "percentage": self.percentage,
         }
+
+    def format_time(self, seconds: float) -> str:
+        """Format time in H:M:S format."""
+        if seconds < 0:
+            return "0:00:00"
+
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+
+        return f"{hours}:{minutes:02d}:{secs:02d}"
 
     def format_progress(self) -> str:
         """Format progress message."""
         stats = self.get_stats()
+        elapsed_formatted = self.format_time(stats["elapsed"])
+        eta_formatted = (
+            self.format_time(stats["eta"]) if stats["eta"] > 0 else "Calculating..."
+        )
+
         return (
             f"📊 **Forward Progress: {stats['percentage']:.1f}%**\n"
             f"✅ Processed: {stats['processed']:,}/{stats['total']:,}\n"
-            f"⏳ Rate: {stats['rate']:.1f} messages/second\n"
-            f"⌛ Elapsed: {stats['elapsed']:.1f}s\n"
+            f"🕒 ETA: {eta_formatted}\n"
+            f"⌛ Elapsed: {elapsed_formatted}\n"
             f"📑 Media Groups: {stats['media_groups']}\n"
             f"⚠️ Failed: {stats['failed']}\n"
             f"⏭️ Skipped: {stats['skipped']}\n"
@@ -113,7 +141,7 @@ def setup_logging() -> None:
     """Configure logging with rich handler."""
     logging.basicConfig(
         level=logging.INFO,
-    format="[%(asctime)s] - %(levelname)s: %(message)s - %(filename)s - %(lineno)s - %(funcName)s",
+        format="[%(asctime)s] - %(levelname)s: %(message)s - %(filename)s - %(lineno)s - %(funcName)s",
         handlers=[logging.StreamHandler(), logging.FileHandler("bot.log")],
         datefmt="%H:%M:%S",
     )
