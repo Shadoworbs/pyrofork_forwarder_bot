@@ -40,6 +40,7 @@ A sophisticated Telegram bot built with PyroFork that allows owners to forward m
 
 - `/settings` (or `/st`) - View current settings with chat details and timestamps
 - `/stats` - View detailed statistics of current/last forward operation
+- `/count` (or `/cnt`) - Show chat history statistics with ETA for forwarding
 - `/reset` (or `/rs`) - Reset all settings with 5-second confirmation countdown
 
 **Note**: All commands are owner-only and work exclusively in private chats for security.

@@ -10,32 +10,32 @@ from rich.console import Console
 console = Console()
 
 
-class RetryHandler:
-    """Handles retrying operations with exponential backoff."""
+# class RetryHandler:
+#     """Handles retrying operations with exponential backoff."""
 
-    def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
-        self.max_retries = max_retries
-        self.base_delay = base_delay
+#     def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
+#         self.max_retries = max_retries
+#         self.base_delay = base_delay
 
-    async def retry_with_backoff(self, func, *args, **kwargs) -> Any:
-        """Execute a function with exponential backoff retry."""
-        retry_count = 0
-        while retry_count < self.max_retries:
-            try:
-                return await func(*args, **kwargs)
-            except FloodWait as e:
-                delay = e.value * (2**retry_count)
-                console.log(f"[yellow]FloodWait: Sleeping for {delay} seconds[/yellow]")
-                await asyncio.sleep(delay)
-                retry_count += 1
-            except Exception as e:
-                if retry_count == self.max_retries - 1:
-                    raise
-                delay = self.base_delay * (2**retry_count)
-                console.log(f"[red]Error: {str(e)}. Retrying in {delay} seconds[/red]")
-                await asyncio.sleep(delay)
-                retry_count += 1
-        raise Exception(f"Failed after {self.max_retries} retries")
+#     async def retry_with_backoff(self, func, *args, **kwargs) -> Any:
+#         """Execute a function with exponential backoff retry."""
+#         retry_count = 0
+#         while retry_count < self.max_retries:
+#             try:
+#                 return await func(*args, **kwargs)
+#             except FloodWait as e:
+#                 delay = e.value * (2**retry_count)
+#                 console.log(f"[yellow]FloodWait: Sleeping for {delay} seconds[/yellow]")
+#                 await asyncio.sleep(delay)
+#                 retry_count += 1
+#             except Exception as e:
+#                 if retry_count == self.max_retries - 1:
+#                     raise
+#                 delay = self.base_delay * (2**retry_count)
+#                 console.log(f"[red]Error: {str(e)}. Retrying in {delay} seconds[/red]")
+#                 await asyncio.sleep(delay)
+#                 retry_count += 1
+#         raise Exception(f"Failed after {self.max_retries} retries")
 
 
 class ForwardStats:
@@ -80,7 +80,7 @@ class ForwardStats:
 
     def format_time(self, seconds: float) -> str:
         """Format time in H:M:S format."""
-        if seconds < 0:
+        if seconds <= 0:
             return "0:00:00"
 
         hours = int(seconds // 3600)
@@ -94,7 +94,7 @@ class ForwardStats:
         stats = self.get_stats()
         elapsed_formatted = self.format_time(stats["elapsed"])
         eta_formatted = (
-            self.format_time(stats["eta"]) if stats["eta"] > 0 else "Calculating..."
+            self.format_time(stats["eta"])
         )
 
         return (

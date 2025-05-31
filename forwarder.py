@@ -20,7 +20,7 @@ from bot.configs import Config
 from bot.database import Database
 from bot.helper import HelperClass
 from bot.settings_manager import SettingsManager
-from bot.utils import RetryHandler, ForwardStats, MessageQueue, setup_logging
+from bot.utils import ForwardStats, MessageQueue, setup_logging
 
 # Configure logging
 setup_logging()
@@ -31,14 +31,15 @@ api_id = Config.API_ID
 api_hash = Config.API_HASH
 
 # Configuration constants
-COPY_DELAY_SECONDS = 0.5  # Delay after each copy operation to prevent FloodWait
+COPY_DELAY_SECONDS_M = 1  # Delay after each copy operation to prevent FloodWait
+COPY_DELAY_SECONDS_MG = 2  # Delay for media groups
 
 # Initialize components
 console = Console()
 db = Database("user_data")  # Initialize with user_data directory
 active_forwards: Dict[int, MessageQueue] = {}  # Track active forward operations by user
 forward_stats: Dict[int, ForwardStats] = {}  # Track statistics by user
-retry_handler = RetryHandler()
+# retry_handler = RetryHandler()
 reset_confirmations = {}  # Track reset confirmations
 
 # Initialize client with optimized settings
@@ -65,9 +66,7 @@ async def start_command(client: Client, message: Message):
     """Handle start command"""
     start_text = """
 Hi, welcome to the Best Forwarder Bot! 🤖\n
-I can forward all your chat history from one chat to another including files, videos, text and more!\n
-I can also forward media groups as they are without splitting them into individual messages.\n
-Use /help to see available commands."""
+Send `/help` to see available commands.\n"""
     await message.reply(start_text, disable_web_page_preview=True)
 
 
@@ -77,21 +76,17 @@ Use /help to see available commands."""
 async def help_command(client: Client, message: Message):
     """Handle help command"""
     help_text = """
+Hello! 👋\n
+I am your personal forwarder bot.\nI can help you forward files from one chat to another with ease.\n\n
 Here are the available commands:\n
-/start - Start the bot\n
-/set_ids (or /set) source_chat_id target_chat_id - Set the source and target chat IDs for forwarding.\n
-/forward (or /f) - Start forwarding files from the source chat to the target chat.\n
-/stop - Stop an ongoing forward operation\n
-/settings (or /st) - View your current settings\n
-/stats - View detailed statistics of the current/last forward operation\n
-/rs (or /reset) - Reset your settings and start over.\n
-
-**Features:**\n
-✅ **Chronological Order**: Messages are forwarded in their original chronological order (oldest first)\n
-✅ **Media Groups**: Albums and media groups are preserved and forwarded as complete units\n
-✅ **Progress Tracking**: Real-time progress updates with detailed statistics\n
-✅ **Error Recovery**: Automatic retry with exponential backoff for failed operations\n
-✅ **Rate Limiting**: Built-in delays to prevent FloodWait errors\n
+**/start:** Start the bot\n
+**/set_ids (or /set):** source_chat_id target_chat_id - Set the source and target chat IDs for forwarding.\n
+**/forward (or /f):** Start forwarding files from the source chat to the target chat.\n
+**/stop:** Stop an ongoing forward operation\n
+**/count (or /cnt):** Show chat history statistics with ETA for forwarding\n
+**/settings (or /st):** View your current settings\n
+**/stats:** View detailed statistics of the current/last forward operation\n
+**/rs (or /reset):** Reset your settings and start over.\n
 """
     await message.reply(help_text)
 
@@ -109,8 +104,11 @@ async def stop_command(client: Client, message: Message):
         stats = forward_stats.get(user_id)
         if stats:
             await message.reply(
-                f"✋ Forward operation stopped.\n\n{stats.format_progress()}"
+                f"⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️\n\n"
+                f"** ✋ Forward process stopped by {user_id}.**\n\n{stats.format_progress()}\n"
+                f"⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️"
             )
+            logging.info(f"Forward operation stopped by user {user_id}")
     else:
         await message.reply("❌ No active forward operation to stop.")
 
@@ -127,6 +125,208 @@ async def stats_command(client: Client, message: Message):
     else:
         await message.reply(
             "❌ No statistics available. Start a forward operation first."
+        )
+
+
+@app.on_message(
+    filters.command(["count", "cnt"]) & filters.user(Config.OWNER_ID) & filters.private
+)
+async def count_command(client: Client, message: Message):
+    """Show chat history count with ETA calculation"""
+    user_id = message.from_user.id
+
+    # Admin check (already handled by filter, but keeping for clarity)
+    if message.from_user.id != Config.OWNER_ID:
+        await message.reply("❌ You are not authorized to use this command.")
+        return
+
+    # Check if there's an active forward operation
+    if user_id in active_forwards:
+        await message.reply(
+            "⚠️ You have an active forward operation running. "
+            "Use /stop to stop it first, then check chat count."
+        )
+        return
+
+    try:
+        # Initialize database for user if needed
+        await db.init(user_id)
+
+        # Get user settings from database
+        settings = await db.get_user_settings(user_id)
+
+        if (
+            not settings
+            or not settings.get("source_chat")
+            or not settings.get("target_chat")
+        ):
+            await message.reply(
+                "❌ **No settings found**\n\n"
+                "You haven't configured your forwarder yet.\n"
+                "Use `/set_ids source_chat target_chat` to get started.\n\n"
+                "**Example:**\n"
+                "`/set_ids @sourcechannel @targetchannel`\n"
+                "`/set_ids -1001234567890 -1009876543210`"
+            )
+            return
+
+        source_chat = settings.get("source_chat")
+        target_chat = settings.get("target_chat")
+
+        # Validate chat access
+        try:
+            chat_valid, faulty_ids = await conversation_handler.is_valid_chat(
+                (source_chat,)
+            )
+            if not chat_valid:
+                await message.reply(
+                    f"❌ **Cannot access source chat**\n\n"
+                    f"The source chat `{source_chat}` is not accessible.\n"
+                    f"Please check:\n"
+                    f"• Chat ID is correct\n"
+                    f"• Bot has access to the chat\n"
+                    f"• Chat still exists\n\n"
+                    f"Use `/set_ids` to reconfigure your settings."
+                )
+                return
+        except Exception as chat_error:
+            logging.error(f"Error validating chat {source_chat}: {chat_error}")
+            await message.reply(
+                f"❌ **Error accessing chat**\n\n"
+                f"Could not validate access to source chat `{source_chat}`.\n"
+                f"Error: {str(chat_error)}\n\n"
+                f"Please try again later or use `/set_ids` to reconfigure."
+            )
+            return
+
+        # Send initial progress message
+        progress_msg = await message.reply(
+            "🔍 **Counting messages...**\n\nPlease wait while I analyze the chat history..."
+        )
+
+        # Initialize counters
+        total_messages = 0
+        media_groups_set = set()  # Track unique media group IDs
+        valid_messages = 0
+        skipped_messages = 0
+
+        try:
+            # Count messages in chat history
+            async for msg in app.get_chat_history(source_chat):
+                total_messages += 1
+
+                # Skip invalid message types (same logic as forward command)
+                if any(
+                    [msg.service, msg.empty, msg.command, msg.has_protected_content]
+                ):
+                    skipped_messages += 1
+                    continue
+
+                # Count valid messages
+                valid_messages += 1
+
+                # Track media groups
+                if msg.media_group_id:
+                    media_groups_set.add(msg.media_group_id)
+
+                # Update progress every 1000 messages
+                if total_messages % 1000 == 0:
+                    await progress_msg.edit_text(
+                        f"🔍 **Counting messages...**\n\n"
+                        f"📊 Processed: `{total_messages:,}` messages\n"
+                        f"✅ Valid: `{valid_messages:,}`\n"
+                        f"⏭️ Skipped: `{skipped_messages:,}`\n"
+                        f"📑 Media Groups: `{len(media_groups_set):,}`\n\n"
+                        f"⏳ Please wait..."
+                    )
+
+        except Exception as count_error:
+            logging.error(f"Error counting messages in {source_chat}: {count_error}")
+            await progress_msg.edit_text(
+                f"❌ **Error counting messages**\n\n"
+                f"An error occurred while counting messages in the source chat.\n"
+                f"Error: {str(count_error)}\n\n"
+                f"This might be due to:\n"
+                f"• Network connectivity issues\n"
+                f"• Chat access restrictions\n"
+                f"• Telegram API limits\n\n"
+                f"Please try again later."
+            )
+            return
+
+        # Calculate ETA based on message counts and delays
+        total_media_groups = len(media_groups_set)
+        single_messages = valid_messages - sum(
+            1 for _ in media_groups_set
+        )  # Approximate
+
+        # Calculate estimated time with delays
+        # Each media group: COPY_DELAY_SECONDS_MG (2 seconds)
+        # Each single message: COPY_DELAY_SECONDS_M (1 second)
+        # Plus processing overhead per message (~0.1 seconds average)
+        estimated_time = (
+            (total_media_groups * COPY_DELAY_SECONDS_MG)
+            + (single_messages * COPY_DELAY_SECONDS_M)
+            + (valid_messages * 0.1)  # Processing overhead
+        )
+
+        # Format time
+        def format_time(seconds: float) -> str:
+            """Format time in H:M:S format."""
+            if seconds < 0:
+                return "0:00:00"
+
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+
+            return f"{hours}H:{minutes:02d}M:{secs:02d}S"
+
+        # Get chat information for display
+        try:
+            chat_infos = await conversation_handler.get_chat_info(
+                (source_chat, target_chat)
+            )
+            if len(chat_infos) >= 2:
+                source_info = chat_infos[0]
+                target_info = chat_infos[1]
+                source_title = source_info.get("title", "Unknown")
+                target_title = target_info.get("title", "Unknown")
+            else:
+                source_title = "Unknown"
+                target_title = "Unknown"
+        except Exception:
+            source_title = "Unknown"
+            target_title = "Unknown"
+
+        # Format final response
+        count_text = (
+            f"📊 **Chat History Analysis**\n\n"
+            f"📥 **Source Chat:** `{source_title}`\n"
+            f"📤 **Target Chat:** `{target_title}`\n\n"
+            f"📈 **Message Statistics:**\n"
+            f"📋 **Total Messages:** `{total_messages:,}`\n"
+            f"✅ **Valid for Forward:** `{valid_messages:,}`\n"
+            f"⏭️ **Skipped (Invalid):** `{skipped_messages:,}`\n"
+            f"📑 **Media Groups:** `{total_media_groups:,}`\n\n"
+            f"⏱️ **Estimated Forward Time:**\n"
+            f"🕒 **ETA:** `{format_time(estimated_time)}`\n\n"
+            f"ℹ️ **Note:** ETA includes processing delays and rate limiting to prevent FloodWait errors.\n\n"
+            f"**Ready to forward?** Use `/forward` to start!"
+        )
+
+        await progress_msg.edit_text(count_text)
+        logging.info(
+            f"Count command completed for user {user_id}: {valid_messages:,} valid messages, {total_media_groups:,} media groups"
+        )
+
+    except Exception as e:
+        logging.error(f"Error in count command: {e}")
+        await message.reply(
+            "❌ **Count Error**\n\n"
+            f"An error occurred while analyzing the chat history.\n"
+            f"Error: {str(e)}\n\n"
+            "Please try again later or check your settings with `/settings`."
         )
 
 
@@ -431,41 +631,37 @@ async def forward_media_group(
     client: Client,
     media_group: List[Message],
     target_chat: str,
-    retry_handler: RetryHandler,
+    source_chat: str | int = None,
 ) -> bool:
-    """Forward a media group with retries."""
+    """Forward a media group without retries."""
     try:
-        await retry_handler.retry_with_backoff(
-            client.copy_media_group,
+        await client.copy_media_group(
             chat_id=target_chat,
-            from_chat_id=media_group[0].chat.id,
+            from_chat_id=source_chat,
             message_id=media_group[0].id,
         )
         # Add delay after successful copy operation to prevent FloodWait
-        await asyncio.sleep(COPY_DELAY_SECONDS)
+        # await asyncio.sleep(len(media_group) * COPY_DELAY_SECONDS_MG)
         return True
     except Exception as e:
-        logging.error(f"Error forwarding media group: {e}")
+        logging.error(f"Error forwarding media group {media_group[0].id}: {e}")
         return False
 
 
-async def forward_message(
-    client: Client, message: Message, target_chat: str, retry_handler: RetryHandler
-) -> bool:
-    """Forward a single message with retries."""
+async def forward_message(client: Client, message: Message, target_chat: str) -> bool:
+    """Forward a single message without retries."""
     try:
-        await retry_handler.retry_with_backoff(
-            client.copy_message,
+        await client.copy_message(
             chat_id=target_chat,
             from_chat_id=message.chat.id,
             message_id=message.id,
             disable_notification=True,
         )
         # Add delay after successful copy operation to prevent FloodWait
-        await asyncio.sleep(COPY_DELAY_SECONDS)
+        # await asyncio.sleep(COPY_DELAY_SECONDS_M)
         return True
     except Exception as e:
-        logging.error(f"Error forwarding message: {e}")
+        logging.error(f"Error forwarding {message.id}: {e}")
         return False
 
 
@@ -517,7 +713,7 @@ async def forward_command(client: Client, message: Message):
     logging.info(
         f"Starting forward operation from {source_chat} to {target_chat} for user {user_id}"
     )
-    progress_percentage = 0
+    # progress_percentage = 0
 
     try:
         # Initialize message queue
@@ -525,9 +721,8 @@ async def forward_command(client: Client, message: Message):
         active_forwards[user_id] = queue
 
         # Start progress updates
-        progress_updater = asyncio.create_task(update_progress(progress_msg, stats))
+        task_scheduler = asyncio.create_task(update_progress(progress_msg, stats))
         await progress_msg.edit_text("📥 Collecting messages in chronological order...")
-        await asyncio.sleep(0.5)  # Initial delay to avoid FloodWait
 
         all_messages = []
         batch_size = 100  # Process in batches to manage memory
@@ -535,7 +730,8 @@ async def forward_command(client: Client, message: Message):
 
         # First pass: collect all messages to reverse the order
         async for msg in app.get_chat_history(source_chat):
-            if not queue._active:
+            if not queue._active and not user_id in active_forwards:
+                logging.info("Forward operation stopped by user.")
                 break
 
             # Skip invalid message types during collection
@@ -545,13 +741,6 @@ async def forward_command(client: Client, message: Message):
 
             all_messages.append(msg)
             total_collected += 1
-
-            # Update progress for collection phase every 100 messages
-            if total_collected % 500 == 0:
-                await progress_msg.edit_text(
-                    f"📥 Collected {total_collected} valid messages...\n"
-                    f"🔄 Preparing to forward in chronological order..."
-                )
 
         # Reverse the entire list to get chronological order (oldest first)
         all_messages.reverse()
@@ -564,11 +753,6 @@ async def forward_command(client: Client, message: Message):
             )
             return
 
-        # await progress_msg.edit_text(
-        #     f"\n{stats.total} messages will be forwarded.\n\n"
-        #     f"{stats.format_progress()}"
-        # )
-
         # Second pass: forward messages in correct chronological order
         for i, msg in enumerate(all_messages):
             if not queue._active:
@@ -579,61 +763,106 @@ async def forward_command(client: Client, message: Message):
                 if media_collector.add_message(msg):
                     complete_groups = media_collector.get_complete_groups()
                     for group in complete_groups:
-                        await asyncio.sleep(0.7)  # Small delay to avoid FloodWait
-                        if await forward_media_group(
-                            client, group, target_chat, retry_handler
-                        ):
-                            stats.processed += len(group)
-                            stats.media_groups += 1
-                        else:
-                            stats.failed += len(group)
-                continue
+                        # check if user_id is in active forwards and stop the program otherwise and alert the user on telegram
+                        if not queue._active and user_id not in active_forwards:
+                            await progress_msg.edit_text(
+                                f"Forwarding stopped by user {user_id}\n"
+                                f"{stats.format_progress()}"
+                            )
+                            logging.info(f"Forward operation stopped by user {user_id}")
+                            break
 
-            # Handle single messages
-            await asyncio.sleep(0.7)  # Small delay to avoid FloodWait
-            if await forward_message(client, msg, target_chat, retry_handler):
-                stats.processed += 1
+                        try:
+                            if await forward_media_group(
+                                client, group, target_chat, source_chat
+                            ):
+                                stats.processed += len(group)
+                                stats.media_groups += 1
+                                logging.info(
+                                    f"Forwarded media group of {len(group)} messages."
+                                )
+                                await asyncio.sleep(
+                                    COPY_DELAY_SECONDS_MG
+                                )  # Delay for media group forwarding
+                            else:
+                                stats.failed += len(group)
+                            continue
+                        except FloodWait as e:
+                            logging.warning(
+                                f"FloodWait encountered while processing media group: sleeping for {e.value + 1} seconds"
+                            )
+                            await asyncio.sleep(e.value + 1)
+                            continue
+                        except Exception as e:
+                            logging.error(f"Error processing media group: {e}")
+                            stats.failed += 1
+                            continue
             else:
-                stats.failed += 1
+                try:
+                    # Handle single messages
+                    if not queue._active and not user_id in active_forwards:
+                        await progress_msg.edit_text(
+                            f"Forwarding stopped by user {user_id}\n{stats.format_progress()}"
+                        )
+                        logging.info(f"Forward operation stopped by user {user_id}")
+                        # await asyncio.sleep(0.7)
+                        break
+                    if await forward_message(client, msg, target_chat):
+                        stats.processed += 1
+                        logging.info(f"Forwarded message {msg.id} from {source_chat}.")
+                        await asyncio.sleep(
+                            COPY_DELAY_SECONDS_M
+                        )  # Delay for single message forwarding
+                    else:
+                        stats.failed += 1
+                        continue
+                except FloodWait as e:
+                    logging.warning(
+                        f"FloodWait encountered while processing message {msg.id}: sleeping for {e.value + 1} seconds"
+                    )
+                    await asyncio.sleep(e.value + 1)
+                    continue
+                except Exception as e:
+                    logging.error(f"Error processing message {msg.id}: {e}")
+                    stats.failed += 1
+                    continue
 
             # Update progress every 10 messages or every 5% of progress
             progress_interval = max(
                 10, stats.total // 20
             )  # Update at least every 5% of progress
             if (i + 1) % progress_interval == 0:
-                stats.percentage = ((i + 1) / stats.total) * 100
+                stats.percentage = (
+                    (i + 1) / (stats.total)
+                ) * 100  # Calculate percentage
                 await progress_msg.edit_text(f"{stats.format_progress()}")
-
-            await asyncio.sleep(0.5)  # Rate limiting to avoid FloodWait
-
-        # Process any remaining media groups
-        for group in media_collector.get_complete_groups():
-            if await forward_media_group(client, group, target_chat, retry_handler):
-                stats.processed += len(group)
-                stats.media_groups += 1
-            else:
-                stats.failed += len(group)
-
-        logging.info("Forwarding completed successfully!")
-
-        # Cleanup
-        if user_id in active_forwards:
-            del active_forwards[user_id]
-        progress_updater.cancel()
 
         # Final status
         await progress_msg.edit_text(
             f"**✅ Forward operation completed!**\n\n{stats.format_progress()}"
         )
+        logging.info(f"Forward operation completed for user {user_id}: ")
+
+        # Cleanup
+        if user_id in active_forwards or queue._active:
+            task_scheduler.cancel()  # Cancel the progress update task
+            # Stop the queue and remove from active forwards
+            queue.stop()
+            del active_forwards[user_id]
 
     except Exception as e:
         logging.error(f"Error in forward operation: {e}")
-        if user_id in active_forwards:
-            del active_forwards[user_id]
-        if progress_updater:
-            progress_updater.cancel()
         await progress_msg.edit_text(
-            f"❌ An error occurred during forwarding: {str(e)}\n\n{stats.format_progress()}"
+            "❌ An error occurred during the forward operation.\n"
+            "Please check the logs for details."
+        )
+    except FloodWait as e:
+        logging.warning(
+            f"FloodWait encountered during forward operation: sleeping for {e.value + 1} seconds"
+        )
+        await asyncio.sleep(e.value + 1)
+        await progress_msg.edit_text(
+            f"⚠️ FloodWait encountered. Please wait for {e.value + 1} seconds before retrying the operation."
         )
 
 
