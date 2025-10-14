@@ -12,3 +12,5 @@ class Config(object):
     API_HASH = API_HASH
     OWNER_USERNAME = OWNER_USERNAME
     OWNER_ID = int(os.getenv("OWNER_ID", default=0))
+    DELAY_FOR_SINGLE_MESSAGE = int(os.getenv("DELAY_FOR_SINGLE_MESSAGE", default=1))
+    DELAY_FOR_MEDIA_GROUPS = int(os.getenv("DELAY_FOR_MEDIA_GROUPS", default=2))

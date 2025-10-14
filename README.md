@@ -2,6 +2,19 @@
 
 A sophisticated Telegram bot built with PyroFork that allows owners to forward messages and media between chats with advanced features, comprehensive error handling, and intelligent media group preservation.
 
+## Qucick Links
+
+- [Features](#-features)
+- [Commands](#-commands)
+- [Setup Instructions](#setup-instructions)
+- [Installation](#installation)
+- [Running the Bot](#running-the-bot)
+- [Project Structure](#project-structure)
+- [Database Management](#database-management)
+- [Technical Features](#technical-features)
+- [Error Handling & Reliability](#error-handling--reliability)
+- [Contributing](#contributing)
+
 ## 🚀 Features
 
 ### Core Features
@@ -82,6 +95,8 @@ A sophisticated Telegram bot built with PyroFork that allows owners to forward m
    API_ID = "your_api_id"
    API_HASH = "your_api_hash"
    OWNER_ID = "your telegram ID (not username)"
+   DELAY_FOR_SINGLE_MESSAGE = 1 # Delay (in seconds) after each copy operation to prevent FloodWait (increase only if you get FloodWait errors)
+   DELAY_FOR_MEDIA_GROUPS = 2 # Delay (in seconds) for media groups
    ```
 
 ### Running the Bot
@@ -104,8 +119,10 @@ A sophisticated Telegram bot built with PyroFork that allows owners to forward m
 
 1. Use the provided startup script:
 
+   On Linux:
+
    ```bash
-   chmod +x start.sh  # Make executable (Linux/macOS)
+   chmod +x start.sh  # Make executable (Linux)
    ./start.sh
    ```
 

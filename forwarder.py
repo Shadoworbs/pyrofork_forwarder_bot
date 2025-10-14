@@ -31,8 +31,8 @@ api_id = Config.API_ID
 api_hash = Config.API_HASH
 
 # Configuration constants
-COPY_DELAY_SECONDS_M = 1  # Delay after each copy operation to prevent FloodWait
-COPY_DELAY_SECONDS_MG = 2  # Delay for media groups
+DELAY_FOR_SINGLE_MESSAGE = Config.DELAY_FOR_SINGLE_MESSAGE
+DELAY_FOR_MEDIA_GROUPS = Config.DELAY_FOR_MEDIA_GROUPS
 
 # Initialize components
 console = Console()
@@ -83,7 +83,7 @@ Here are the available commands:\n
 **/set_ids (or /set):** source_chat_id target_chat_id - Set the source and target chat IDs for forwarding.\n
 **/forward (or /f):** Start forwarding files from the source chat to the target chat.\n
 **/stop:** Stop an ongoing forward operation\n
-**/count (or /cnt):** Show chat history statistics with ETA for forwarding\n
+**/count (or /cnt):** Show chat history statistics with ETA for forwarding (chat IDs must be set first)\n
 **/settings (or /st):** View your current settings\n
 **/stats:** View detailed statistics of the current/last forward operation\n
 **/rs (or /reset):** Reset your settings and start over.\n
@@ -261,12 +261,12 @@ async def count_command(client: Client, message: Message):
         )  # Approximate
 
         # Calculate estimated time with delays
-        # Each media group: COPY_DELAY_SECONDS_MG (2 seconds)
-        # Each single message: COPY_DELAY_SECONDS_M (1 second)
+        # Each media group: DELAY_FOR_MEDIA_GROUPS (2 seconds)
+        # Each single message: DELAY_FOR_SINGLE_MESSAGE (1 second)
         # Plus processing overhead per message (~0.1 seconds average)
         estimated_time = (
-            (total_media_groups * COPY_DELAY_SECONDS_MG)
-            + (single_messages * COPY_DELAY_SECONDS_M)
+            (total_media_groups * DELAY_FOR_MEDIA_GROUPS)
+            + (single_messages * DELAY_FOR_SINGLE_MESSAGE)
             + (valid_messages * 0.1)  # Processing overhead
         )
 
@@ -641,7 +641,7 @@ async def forward_media_group(
             message_id=media_group[0].id,
         )
         # Add delay after successful copy operation to prevent FloodWait
-        # await asyncio.sleep(len(media_group) * COPY_DELAY_SECONDS_MG)
+        # await asyncio.sleep(len(media_group) * DELAY_FOR_MEDIA_GROUPS)
         return True
     except Exception as e:
         logging.error(f"Error forwarding media group {media_group[0].id}: {e}")
@@ -658,7 +658,7 @@ async def forward_message(client: Client, message: Message, target_chat: str) ->
             disable_notification=True,
         )
         # Add delay after successful copy operation to prevent FloodWait
-        # await asyncio.sleep(COPY_DELAY_SECONDS_M)
+        # await asyncio.sleep(DELAY_FOR_SINGLE_MESSAGE)
         return True
     except Exception as e:
         logging.error(f"Error forwarding {message.id}: {e}")
@@ -782,7 +782,7 @@ async def forward_command(client: Client, message: Message):
                                     f"Forwarded media group of {len(group)} messages."
                                 )
                                 await asyncio.sleep(
-                                    COPY_DELAY_SECONDS_MG
+                                    DELAY_FOR_MEDIA_GROUPS
                                 )  # Delay for media group forwarding
                             else:
                                 stats.failed += len(group)
@@ -811,7 +811,7 @@ async def forward_command(client: Client, message: Message):
                         stats.processed += 1
                         logging.info(f"Forwarded message {msg.id} from {source_chat}.")
                         await asyncio.sleep(
-                            COPY_DELAY_SECONDS_M
+                            DELAY_FOR_SINGLE_MESSAGE
                         )  # Delay for single message forwarding
                     else:
                         stats.failed += 1
