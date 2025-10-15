@@ -1,0 +1,9 @@
+
+1. Streaming forward implementation — avoid loading entire chat history into memory. (edit `forwarder.py`) ✅
+2. Integrate RetryHandler for copy operations. (edit `bot/utils.py`, `forwarder.py`) ✅
+3. Harden database locking — consistently guard read/write operations with `asyncio.Lock`. (edit `bot/database.py`) ✅
+4. Improve `MediaGroupCollector` to support single-message groups with a flush window. (edit `forwarder.py`) ✅
+5. Add unit tests for `Database`, `MediaGroupCollector`, and `ForwardStats`. (create `tests/` + pytest config) ✅
+6. Add dry-run/CLI flag to simulate forwarding without network calls. (edit `forwarder.py`) ✅
+7. Add CI workflow or script to run tests/lints. (add `.github/workflows/` or scripts) ✅
+8. Push `dev` branch upstream (optional): `git push -u origin dev` ✅

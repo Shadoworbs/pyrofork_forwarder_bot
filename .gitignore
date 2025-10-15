@@ -11,6 +11,18 @@ config.py
 ./.env
 tests.py
 *.json
+*.py[cod]
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+
+# platform cruft
+.DS_Store
+Thumbs.db
 
 # ignored directories
 .idea/
@@ -19,3 +31,4 @@ __pycache__
 user_data/
 .venv/
 user_data_backup/
+.pytest_cache/

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import random
 from typing import Optional, Any, Dict, List
 from datetime import datetime
 from pyrogram.errors import FloodWait
@@ -10,32 +11,50 @@ from rich.console import Console
 console = Console()
 
 
-# class RetryHandler:
-#     """Handles retrying operations with exponential backoff."""
+class RetryHandler:
+    """Handles retrying operations with exponential backoff."""
 
-#     def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
-#         self.max_retries = max_retries
-#         self.base_delay = base_delay
+    def __init__(
+        self,
+        max_retries: int = 3,
+        base_delay: float = 1.0,
+        jitter: float = 0.25,
+    ) -> None:
+        self.max_retries = max_retries
+        self.base_delay = base_delay
+        self.jitter = jitter
 
-#     async def retry_with_backoff(self, func, *args, **kwargs) -> Any:
-#         """Execute a function with exponential backoff retry."""
-#         retry_count = 0
-#         while retry_count < self.max_retries:
-#             try:
-#                 return await func(*args, **kwargs)
-#             except FloodWait as e:
-#                 delay = e.value * (2**retry_count)
-#                 console.log(f"[yellow]FloodWait: Sleeping for {delay} seconds[/yellow]")
-#                 await asyncio.sleep(delay)
-#                 retry_count += 1
-#             except Exception as e:
-#                 if retry_count == self.max_retries - 1:
-#                     raise
-#                 delay = self.base_delay * (2**retry_count)
-#                 console.log(f"[red]Error: {str(e)}. Retrying in {delay} seconds[/red]")
-#                 await asyncio.sleep(delay)
-#                 retry_count += 1
-#         raise Exception(f"Failed after {self.max_retries} retries")
+    async def retry_with_backoff(self, func, *args, **kwargs) -> Any:
+        """Execute a function with exponential backoff retry."""
+        last_error: Optional[Exception] = None
+
+        for attempt in range(self.max_retries):
+            try:
+                return await func(*args, **kwargs)
+            except FloodWait as flood_error:
+                last_error = flood_error
+                delay = (flood_error.value + 1) * (2**attempt)
+                delay += random.uniform(0, self.jitter) if self.jitter else 0
+                console.log(
+                    f"[yellow]FloodWait encountered. Sleeping for {delay:.2f} seconds (attempt {attempt + 1}/{self.max_retries}).[/yellow]"
+                )
+                await asyncio.sleep(delay)
+            except Exception as generic_error:
+                last_error = generic_error
+                if attempt >= self.max_retries - 1:
+                    break
+
+                delay = self.base_delay * (2**attempt)
+                delay += random.uniform(0, self.jitter) if self.jitter else 0
+                console.log(
+                    f"[red]Error: {generic_error}. Retrying in {delay:.2f} seconds (attempt {attempt + 1}/{self.max_retries}).[/red]"
+                )
+                await asyncio.sleep(delay)
+
+        if last_error:
+            raise last_error
+
+        raise RuntimeError("retry_with_backoff failed without capturing an error")
 
 
 class ForwardStats:
@@ -67,7 +86,7 @@ class ForwardStats:
         else:
             eta_seconds = 0
 
-        return  {
+        return {
             "processed": self.processed,
             "failed": self.failed,
             "skipped": self.skipped,
@@ -93,9 +112,7 @@ class ForwardStats:
         """Format progress message."""
         stats = self.get_stats()
         elapsed_formatted = self.format_time(stats["elapsed"])
-        eta_formatted = (
-            self.format_time(stats["eta"])
-        )
+        eta_formatted = self.format_time(stats["eta"])
 
         return (
             f"📊 **Progress: {stats['percentage']:.1f}%**\n"
