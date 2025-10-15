@@ -539,7 +539,7 @@ async def reset_command(client: Client, message: Message):
 async def set_ids_command(client: Client, message: Message):
     """Start the chat ID setup process"""
     user_id = message.from_user.id
-    ids = message.text.strip().split(" ")
+    parts = message.text.strip().split()
 
     if message.from_user.id != Config.OWNER_ID:
         await message.reply("❌ You are not authorized to use this command.")
@@ -547,7 +547,7 @@ async def set_ids_command(client: Client, message: Message):
 
     await db.init(user_id)  # Initialize database for the user
 
-    if not len(ids) == 3:
+    if len(parts) < 3:
         await message.reply(
             "❌ Invalid command format.\nUse `/set_ids source_id target_id`\n"
             "**SOURCE_CHAT:** The chat ID or username of the source chat.\n"
@@ -555,12 +555,22 @@ async def set_ids_command(client: Client, message: Message):
         )
         return
 
-    source_chat_id = ids[1].strip()
-    target_chat_id = ids[2].strip()
+    source_chat_id = parts[1].strip()
+    target_chat_id = parts[2].strip()
+    extra_flags = {flag.lower() for flag in parts[3:]}
 
-    if await db.get_user_settings(user_id):
+    existing_settings = await db.get_user_settings(user_id) or {}
+    has_active_configuration = bool(
+        existing_settings.get("source_chat") and existing_settings.get("target_chat")
+    )
+    force_overwrite = bool(
+        extra_flags & {"--force", "-f", "force", "overwrite", "--overwrite"}
+    )
+
+    if has_active_configuration and not force_overwrite:
         await message.reply(
-            "⚠️ You already have a configuration.\nUse /settings to view or /reset to change it."
+            "⚠️ A configuration already exists.\n"
+            "Re-run the command with `--force` to overwrite, or use /reset first."
         )
         return
 
@@ -578,7 +588,11 @@ async def set_ids_command(client: Client, message: Message):
             )
             return
         else:
-            await message.reply("✅ Valid chat IDs. Proceeding to save settings...")
+            await message.reply(
+                "✅ Valid chat IDs. Proceeding to {}settings...".format(
+                    "update " if has_active_configuration else "save "
+                )
+            )
         # Save settings
         await db.set_user_chats(user_id, source_chat_id, target_chat_id)
         source_info, target_info = await conversation_handler.get_chat_info(
@@ -673,11 +687,17 @@ async def forward_message(
 
 
 async def update_progress(
-    message: Message, stats: ForwardStats, update_interval: int = 5
+    message: Message,
+    stats: ForwardStats,
+    update_interval: int = 5,
+    completion_event: asyncio.Event | None = None,
 ) -> None:
     """Update progress message periodically."""
     last_update = 0
     while True:
+        if completion_event and completion_event.is_set():
+            break
+
         current_time = time.time()
         if current_time - last_update >= update_interval:
             await message.edit_text(stats.format_progress())
@@ -738,9 +758,12 @@ async def forward_command(client: Client, message: Message):
         # Initialize message queue
         queue = MessageQueue()
         active_forwards[user_id] = queue
+        forward_complete = asyncio.Event()
 
         # Start progress updates
-        task_scheduler = asyncio.create_task(update_progress(progress_msg, stats))
+        task_scheduler = asyncio.create_task(
+            update_progress(progress_msg, stats, completion_event=forward_complete)
+        )
         counting_text = "📥 Counting messages before forwarding..."
         if dry_run:
             counting_text += "\n\n(Dry-run mode in effect.)"
@@ -923,6 +946,14 @@ async def forward_command(client: Client, message: Message):
                 completion += " (dry-run)"
             await progress_msg.edit_text(f"{completion}\n\n{stats.format_progress()}")
             logging.info(f"Forward operation completed for user {user_id}: ")
+            logging.info(
+                "Forward complete summary: processed=%s failed=%s skipped=%s media_groups=%s",
+                stats.processed,
+                stats.failed,
+                stats.skipped,
+                stats.media_groups,
+            )
+            forward_complete.set()
     except FloodWait as e:
         logging.warning(
             f"FloodWait encountered during forward operation: sleeping for {e.value + 1} seconds"
@@ -938,6 +969,7 @@ async def forward_command(client: Client, message: Message):
             "Please check the logs for details."
         )
     finally:
+        forward_complete.set()
         try:
             task_scheduler.cancel()
         except Exception:
