@@ -60,6 +60,7 @@ class MediaGroupCollector:
         return remaining
 
     def _pop_group(self, group_id: str) -> List[Any]:
+        """Remove and return a media group by its ID."""
         messages = sorted(
             self.groups[group_id], key=lambda message: getattr(message, "id", 0)
         )

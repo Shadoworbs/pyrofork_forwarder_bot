@@ -615,12 +615,47 @@ async def set_ids_command(client: Client, message: Message):
 
 # ------------- Forward Implementation ------------- #
 
+# Common video extensions to check against
+VIDEO_EXTENSIONS = (
+    ".mp4",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".wmv",
+    ".flv",
+    ".webm",
+    ".m4v",
+    ".mpg",
+    ".mpeg",
+)
+
 
 def _is_forwardable(message: Message) -> bool:
     """Return True when a message is safe to forward."""
-    return not any(
+    # Basic checks
+    if any(
         [message.service, message.empty, message.command, message.has_protected_content]
-    )
+    ):
+        return False
+
+    # Media only mode check
+    if Config.MEDIA_ONLY_MODE:
+        is_valid_video = False
+
+        # Check video objects
+        if message.video and message.video.file_name:
+            if message.video.file_name.lower().endswith(VIDEO_EXTENSIONS):
+                is_valid_video = True
+
+        # Check document objects that might be videos
+        elif message.document and message.document.file_name:
+            if message.document.file_name.lower().endswith(VIDEO_EXTENSIONS):
+                is_valid_video = True
+
+        if not is_valid_video:
+            return False
+
+    return True
 
 
 async def forward_media_group(
