@@ -640,16 +640,17 @@ def _is_forwardable(message: Message) -> bool:
 
     # Media only mode check
     if Config.MEDIA_ONLY_MODE:
+        from message_ids import message_ids
         is_valid_video = False
 
         # Check video objects
-        if message.video and message.video.file_name:
-            if message.video.file_name.lower().endswith(VIDEO_EXTENSIONS):
-                is_valid_video = True
+        # if message.video and message.video.file_name:
+        #     if message.video.file_name.lower().endswith(VIDEO_EXTENSIONS):
+        #         is_valid_video = True
 
         # Check document objects that might be videos
-        elif message.document and message.document.file_name:
-            if message.document.file_name.lower().endswith(VIDEO_EXTENSIONS):
+        if message.document and message.document.file_name:
+            if message.document.file_name.lower().endswith(VIDEO_EXTENSIONS) and message.id not in message_ids:
                 is_valid_video = True
 
         if not is_valid_video:
@@ -948,7 +949,7 @@ async def forward_command(client: Client, message: Message):
                 try:
                     if await forward_message(client, msg, target_chat, dry_run=dry_run):
                         stats.processed += 1
-                        logging.info(f"Forwarded message {msg.id} from {source_chat}.")
+                        logging.info(f"Forwarded message {msg.id} from {source_chat} to {target_chat}.")
                         if not dry_run:
                             await asyncio.sleep(DELAY_FOR_SINGLE_MESSAGE)
                     else:
