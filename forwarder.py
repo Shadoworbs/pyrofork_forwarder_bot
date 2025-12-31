@@ -644,9 +644,9 @@ def _is_forwardable(message: Message) -> bool:
         is_valid_video = False
 
         # Check video objects
-        # if message.video and message.video.file_name:
-        #     if message.video.file_name.lower().endswith(VIDEO_EXTENSIONS):
-        #         is_valid_video = True
+        if message.video and message.video.file_name:
+            if message.video.file_name.lower().endswith(VIDEO_EXTENSIONS):
+                is_valid_video = True
 
         # Check document objects that might be videos
         if message.document and message.document.file_name:
